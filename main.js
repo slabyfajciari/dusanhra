@@ -143,9 +143,13 @@ function setup() {
     app.stage.hitArea = app.screen;
     app.stage.on('pointermove', (event) => {
         if (!hraBezi) return;
-        hrac.x = event.global.x - hracSirka;
-        if (hrac.x < 0 - hracSirka / 2) hrac.x = 0 - hracSirka / 2;
-        if (hrac.x > BASE_GAME_WIDTH - hracSirka / 2) hrac.x = BASE_GAME_WIDTH - hracSirka / 2;
+
+        const pos = event.data.getLocalPosition(app.stage);
+        hrac.x = pos.x - hracSirka / 2;
+
+        if (hrac.x < -hracSirka / 2) hrac.x = -hracSirka / 2;
+        if (hrac.x > BASE_GAME_WIDTH - hracSirka / 2)
+            hrac.x = BASE_GAME_WIDTH - hracSirka / 2;
     });
     app.ticker.add(gameLoop);
 }
