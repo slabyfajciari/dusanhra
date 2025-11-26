@@ -400,44 +400,65 @@ function gameLoop(delta) {
         }
     }
     for (let i = predmeti.length - 1; i >= 0; i--) {
-        const predmet = predmeti[i];
-        predmet.y += rychlostPadania * delta;
-        if (zistilaSaKolizia(hrac, predmet)) {
-            skore += predmet.score || 1;
-            skoreText.text = 'Skore: ' + skore;
-            if (predmet.health !== 0 && zivoty < 6) {
-                zivoty += predmet.health || 0;
-                zivotyText.text = 'Zivoty: ' + zivoty;
-            }
-            playSkore();
-            if (skore >= dalsiLevelSkore) {
-                zvysObtiaznost();
-            }
-            if (predmet.specialEffect === 'boost') {
+    const predmet = predmeti[i];
+    predmet.y += rychlostPadania * delta;
+
+    // --- HANDLE COLLISION ---------------------------------------------------
+    if (zistilaSaKolizia(hrac, predmet)) {
+
+        // SCORE
+        skore += predmet.score ?? 1;
+        skoreText.text = 'Skore: ' + skore;
+
+        // HEALTH
+        if (predmet.health && zivoty < 6) {
+            zivoty += predmet.health;
+            zivotyText.text = 'Zivoty: ' + zivoty;
+        }
+
+        playSkore();
+
+        // LEVEL UP
+        if (skore >= dalsiLevelSkore) zvysObtiaznost();
+
+        // SPECIAL EFFECT
+        switch (predmet.specialEffect) {
+            case 'boost': {
+                rychlostPadania = Math.max(rychlostPadania + 2, 2);
                 setTimeout(() => {
                     rychlostPadania = Math.max(rychlostPadania - 2, 2);
                 }, 2000);
-                rychlostPadania += 2;
-            } else if (predmet.specialEffect === 'slow') {
+                break;
+            }
+            case 'slow': {
+                rychlostPadania = Math.max(rychlostPadania - 2, 2);
                 setTimeout(() => {
                     rychlostPadania += 2;
                 }, 2000);
-                rychlostPadania = Math.max(rychlostPadania - 2, 2);
-            }
-            app.stage.removeChild(predmet);
-            predmeti.splice(i, 1);
-        } else if (predmet.y > BASE_GAME_HEIGHT + 50) {
-            zivoty--;
-            shakeScreen(200);
-            zivotyText.text = 'Zivoty: ' + zivoty;
-            playZivoty();
-            app.stage.removeChild(predmet);
-            predmeti.splice(i, 1);
-            if (zivoty <= 0) {
-                gameOver();
+                break;
             }
         }
+
+        // REMOVE ITEM
+        app.stage.removeChild(predmet);
+        predmeti.splice(i, 1);
+        continue;   // skip falling logic
     }
+
+    // --- HANDLE MISSED ITEMS -----------------------------------------------
+    const missed = predmet.y > BASE_GAME_HEIGHT + 50;
+    if (!missed) continue;
+
+    zivoty--;
+    shakeScreen(200);
+    zivotyText.text = 'Zivoty: ' + zivoty;
+    playZivoty();
+
+    app.stage.removeChild(predmet);
+    predmeti.splice(i, 1);
+
+    if (zivoty <= 0) gameOver();
+}
 }
 
 function zistilaSaKolizia(objektA, objektB) {
