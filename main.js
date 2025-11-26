@@ -84,7 +84,6 @@ function resize() {
 }
 
 
-// --- 3. Funkcia setup() - Pripraví vsetky objekty na začiatku ---
 function setup() {
     window.addEventListener('resize', resize);
     window.addEventListener('orientationchange', resize);
@@ -128,7 +127,7 @@ function setup() {
     app.stage.hitArea = app.screen;
     app.stage.on('pointermove', (event) => {
         if (!hraBezi) return;
-        hrac.x = event.global.x - hracSirka / 2;
+        hrac.x = event.global.x - hracSirka;
         if (hrac.x < 0 - hracSirka / 2) hrac.x = 0 - hracSirka / 2;
         if (hrac.x > BASE_GAME_WIDTH - hracSirka / 2) hrac.x = BASE_GAME_WIDTH - hracSirka / 2;
     });
