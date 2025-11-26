@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Tvoja Hra</title>
+    <style>
+        div{
+            display: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #000;
+        }
+
+        #gameContainer {
+            display: block !important;
+            position: relative;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #nameInput {
+            position: absolute;
+            z-index: 1000;
+            font-size: 24px;
+            padding: 8px;
+            width: 250px;
+            border: 2px solid white;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="gameContainer">
+        <input type="text" id="nameInput" placeholder="Tvoje meno">
+    </div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
+    <script src="main.js"></script>
+</body>
+
+</html>
