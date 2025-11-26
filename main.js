@@ -62,7 +62,7 @@ let skoreText, zivotyText, gameOverText, bestScoreText;
 let tlacidloStart;
 let submitButton, playAgainButton; // Nové tlačidlá na Game Over obrazovke
 let leaderboardContainer;
-let gameOverScreenContainer; // Nový kontajner pre celú obrazovku Game Over
+let gameOverScreenContainer; // Nový kontajner pre celú obrazovku Game Over ahojte
 let overlay; // Nové - pre tmavé pozadie
 
 // NOVÉ: Premenné na riadenie obtiaZnosti
