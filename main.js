@@ -35,13 +35,13 @@ const zivotySounds = [
 // Uprava vah (weight) zmeni relativnu percentualnu sancu, napriklad
 // weight: 50 bude mat vacsiu sancu ako weight: 10.
 const predmety = [
-    { name: 'hellko.png', weight: 10, health: 0, score: 1 },
-    { name: 'semtexik.png', weight: 20, health: 0, score: 2 },
-    { name: 'monstrik.png', weight: 25, health: 0, score: 1 },
-    { name: 'didlo.png', weight: 5, health: 1, score: 2 },
-    { name: 'zuvak.png', weight: 15, health: 0, score: 1 },
-    { name: 'hhc.png', weight: 15, health: 0, score: 1 },
-    { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1 }
+    { name: 'hellko.png', weight: 10, health: 0, score: 1, specialEffect: null },
+    { name: 'semtexik.png', weight: 20, health: 0, score: 2, specialEffect: null },
+    { name: 'monstrik.png', weight: 25, health: 0, score: 1, specialEffect: 'boost' },
+    { name: 'didlo.png', weight: 5, health: 1, score: 2, specialEffect: null },
+    { name: 'zuvak.png', weight: 15, health: 0, score: 1, specialEffect: null },
+    { name: 'hhc.png', weight: 15, health: 0, score: 1, specialEffect: 'slow' },
+    { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1, specialEffect: null }
 ];
 
 // Vyberie nazov suboru predmetu podla vah (weighted random).
@@ -362,6 +362,7 @@ function vytvorPredmet() {
     if (predmetData) {
         predmet.score = predmetData.score;
         predmet.health = predmetData.health;
+        predmet.specialEffect = predmetData.specialEffect;
     }
     predmet.x = Math.random() * (BASE_GAME_WIDTH - polomer * 2) + polomer;
     predmet.y = -polomer;
@@ -411,6 +412,17 @@ function gameLoop(delta) {
             playSkore();
             if (skore >= dalsiLevelSkore) {
                 zvysObtiaznost();
+            }
+            if (predmet.specialEffect === 'boost') {
+                setTimeout(() => {
+                    rychlostPadania = Math.max(rychlostPadania - 2, 2);
+                }, 2000);
+                rychlostPadania += 2;
+            } else if (predmet.specialEffect === 'slow') {
+                setTimeout(() => {
+                    rychlostPadania += 2;
+                }, 2000);
+                rychlostPadania = Math.max(rychlostPadania - 2, 2);
             }
             app.stage.removeChild(predmet);
             predmeti.splice(i, 1);
