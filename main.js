@@ -31,15 +31,30 @@ const zivotySounds = [
     'https://us-tuna-sounds-files.voicemod.net/e2e3c9d8-1420-4e66-b8be-248641f22001-1658610804269.mp3',
     'https://us-tuna-sounds-files.voicemod.net/41450380-a1c2-4c55-bfae-fadce1c186c3-1738182377258.mp3'
 ];
-const menaPredmetov = [
-    'hellko.png',
-    'semtexik.png',
-    'monstrik.png',
-    'didlo.png',
-    'zuvak.png',
-    'hhc.png',
-    'dusan_green_apple_.png'
+// Predmety s vahami (sanca je relativna k suctu v vahach).
+// Uprava vah (weight) zmeni relativnu percentualnu sancu, napriklad
+// weight: 50 bude mat vacsiu sancu ako weight: 10.
+const predmety = [
+    { name: 'hellko.png', weight: 10, health: 0, score: 1 },
+    { name: 'semtexik.png', weight: 20, health: 0, score: 2 },
+    { name: 'monstrik.png', weight: 25, health: 0, score: 1 },
+    { name: 'didlo.png', weight: 5, health: 1, score: 3 },
+    { name: 'zuvak.png', weight: 15, health: 0, score: 1 },
+    { name: 'hhc.png', weight: 15, health: 0, score: 1 },
+    { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1 }
 ];
+
+// Vyberie nazov suboru predmetu podla vah (weighted random).
+function vyberPredmetPodlaSance() {
+    const total = predmety.reduce((s, p) => s + p.weight, 0);
+    let r = Math.random() * total;
+    for (const p of predmety) {
+        if (r < p.weight) return p.name;
+        r -= p.weight;
+    }
+    // Fallback (mal by nastať len pri zaokruhlovacich hodnotach)
+    return predmety[predmety.length - 1].name;
+}
 const LEADERBOARD_LIMIT = 5;
 
 // Premenné pre texty a tlačidlá
@@ -209,13 +224,13 @@ function createUIs() {
     playAgainButton.buttonMode = true;
     playAgainButton.on('pointertap', startGame);
     gameOverScreenContainer.addChild(playAgainButton);
-    
+
     // Kontajner pre zoznam leaderboardu
     leaderboardContainer = new PIXI.Container();
     leaderboardContainer.x = BASE_GAME_WIDTH / 2;
     leaderboardContainer.y = BASE_GAME_HEIGHT / 2 + 50;
     gameOverScreenContainer.addChild(leaderboardContainer);
-    
+
     vytvorStartTlacitko();
 }
 
@@ -275,13 +290,13 @@ function gameOver() {
     hraBezi = false;
     clearInterval(spawner);
     playKoniec();
-    
+
     // Zobrazí celú obrazovku Game Over
     gameOverScreenContainer.visible = true;
-    
+
     // UloZí Best Score (vZdy)
     saveBestScore();
-    
+
     // NOVÉ: Podmienka na zobrazenie inputu
     if (skore > bestScore) {
         submitButton.visible = true;
@@ -333,10 +348,17 @@ function displayLeaderboard() {
 }
 
 function vytvorPredmet() {
-    const predmet = PIXI.Sprite.from("assets/predmety/" + menaPredmetov[Math.floor(Math.random() * menaPredmetov.length)]);
+    const predmetNazov = vyberPredmetPodlaSance();
+    const predmet = PIXI.Sprite.from("assets/predmety/" + predmetNazov);
     const polomer = 60;
     predmet.width = polomer;
     predmet.height = polomer;
+    predmet.name = predmetNazov;
+    const predmetData = predmety.find(p => p.name === predmetNazov);
+    if (predmetData) {
+        predmet.score = predmetData.score;
+        predmet.health = predmetData.health;
+    }
     predmet.x = Math.random() * (BASE_GAME_WIDTH - polomer * 2) + polomer;
     predmet.y = -polomer;
     app.stage.addChild(predmet);
@@ -376,8 +398,12 @@ function gameLoop(delta) {
         const predmet = predmeti[i];
         predmet.y += rychlostPadania * delta;
         if (zistilaSaKolizia(hrac, predmet)) {
-            skore++;
+            skore += predmet.score || 1;
             skoreText.text = 'Skore: ' + skore;
+            if (predmet.health !== 0) {
+                zivoty += predmet.health || 0;
+                zivotyText.text = 'Zivoty: ' + zivoty;
+            }
             playSkore();
             if (skore >= dalsiLevelSkore) {
                 zvysObtiaznost();
