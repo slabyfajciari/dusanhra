@@ -37,7 +37,8 @@ const menaPredmetov = [
     'monstrik.png',
     'didlo.png',
     'zuvak.png',
-    'hhc.png'
+    'hhc.png',
+    'dusan_green_apple_.png'
 ];
 const LEADERBOARD_LIMIT = 5;
 
