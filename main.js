@@ -38,7 +38,7 @@ const predmety = [
     { name: 'hellko.png', weight: 10, health: 0, score: 1 },
     { name: 'semtexik.png', weight: 20, health: 0, score: 2 },
     { name: 'monstrik.png', weight: 25, health: 0, score: 1 },
-    { name: 'didlo.png', weight: 5, health: 1, score: 3 },
+    { name: 'didlo.png', weight: 5, health: 1, score: 2 },
     { name: 'zuvak.png', weight: 15, health: 0, score: 1 },
     { name: 'hhc.png', weight: 15, health: 0, score: 1 },
     { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1 }
@@ -404,7 +404,7 @@ function gameLoop(delta) {
         if (zistilaSaKolizia(hrac, predmet)) {
             skore += predmet.score || 1;
             skoreText.text = 'Skore: ' + skore;
-            if (predmet.health !== 0) {
+            if (predmet.health !== 0 && zivoty < 6) {
                 zivoty += predmet.health || 0;
                 zivotyText.text = 'Zivoty: ' + zivoty;
             }
