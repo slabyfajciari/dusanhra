@@ -34,7 +34,7 @@ const zivotySounds = [
 ];
 // Predmety s vahami (sanca je relativna k suctu v vahach).
 // Uprava vah (weight) zmeni relativnu percentualnu sancu, napriklad
-// weight: 50 bude mat vacsiu sancu ako weight: 10.
+// weight: 50 bude mat vacsiu sancu ako weight: 10. cau
 const predmety = [
     { name: 'hellko.png', weight: 10, health: 0, score: 1, specialEffect: null },
     { name: 'semtexik.png', weight: 20, health: 0, score: 2, specialEffect: null },
