@@ -1,3 +1,6 @@
+//odjebat prave tlacitko
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
 // --- 1. Konfigurácia a Globálne Premenné ---
 const BASE_GAME_WIDTH = 800;
 const BASE_GAME_HEIGHT = 600;
