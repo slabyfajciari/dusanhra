@@ -1,23 +1,19 @@
+// --- 1. Konfigurácia a Globálne Premenné ---
 const BASE_GAME_WIDTH = 800;
 const BASE_GAME_HEIGHT = 600;
-const app = new PIXI.Application({
-    width: BASE_GAME_WIDTH,
-    height: BASE_GAME_HEIGHT,
-    backgroundColor: 0x000000
-});
-document.getElementById('gameContainer').appendChild(app.view);
-const nameInput = document.getElementById('nameInput');
 
-// --- 2. Príprava herných premenných ---
-var activeSpecialEffect = null; // Nové: Aktívny špeciálny efekt hráča
-let hrac;
+// Premenné pre hru
 const hracSirka = 120;
 const hracVyska = 120;
-let predmeti = [];
-let skore = 0;
-let zivoty = 3;
-let bestScore = 0;
-Howler.volume(0.5);
+
+// Konštanty pre kľúče zvukov v Phaser
+const SOUND_KEYS = {
+    SKORE: 'skore_sound',
+    KONIEC: 'koniec_sound',
+    ZIVOTY: 'zivoty_sound'
+};
+
+// Zoznamy zvukov (URL) pre načítanie
 const skoreSounds = [
     'https://us-tuna-sounds-files.voicemod.net/1fd241ac-fff1-448c-b460-e0ec0f5677a3-1697143226783.mp3',
     'https://us-tuna-sounds-files.voicemod.net/94acff2e-ed53-401e-a27f-e9a549f3ec92-1650268712414.mp3',
@@ -32,10 +28,8 @@ const zivotySounds = [
     'https://us-tuna-sounds-files.voicemod.net/e2e3c9d8-1420-4e66-b8be-248641f22001-1658610804269.mp3',
     'https://us-tuna-sounds-files.voicemod.net/41450380-a1c2-4c55-bfae-fadce1c186c3-1738182377258.mp3'
 ];
-// Predmety s vahami (sanca je relativna k suctu v vahach).
-// Uprava vah (weight) zmeni relativnu percentualnu sancu, napriklad
-// weight: 50 bude mat vacsiu sancu ako weight: 10. cau
-const predmety = [
+
+const predmetyData = [
     { name: 'hellko.png', weight: 10, health: 0, score: 1, specialEffect: null },
     { name: 'semtexik.png', weight: 20, health: 0, score: 2, specialEffect: null },
     { name: 'monstrik.png', weight: 25, health: 0, score: 1, specialEffect: 'boost' },
@@ -45,452 +39,433 @@ const predmety = [
     { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1, specialEffect: 'invert' }
 ];
 
-// Vyberie nazov suboru predmetu podla vah (weighted random).
-function vyberPredmetPodlaSance() {
-    const total = predmety.reduce((s, p) => s + p.weight, 0);
-    let r = Math.random() * total;
-    for (const p of predmety) {
-        if (r < p.weight) return p.name;
-        r -= p.weight;
+
+class MainScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainScene' });
+
+        // Herný stav
+        this.hrac = null;
+        this.predmeti = null;
+        this.skore = 0;
+        this.zivoty = 3;
+        this.bestScore = 0;
+        this.hraBezi = false;
+        this.activeSpecialEffect = null;
+        this.rychlostPadania = 4;
+        this.intervalVytvarania = 1000;
+        this.dalsiLevelSkore = 10;
+        this.spawner = null;
+        this.isShaking = false;
+        this.shakeTimer = 0;
+        this.shakeDuration = 0;
+
+        // UI & Input
+        this.skoreText = null;
+        this.zivotyText = null;
+        this.bestScoreText = null;
+        this.tlacidloStart = null;
+        this.gameOverScreenContainer = null;
+        this.submitButtonPhaser = null;
+        this.playAgainButtonPhaser = null;
+        this.nameInput = document.getElementById('nameInput');
+
+        // Zvuky
+        this.skoreSoundKeys = [];
+        this.koniecSoundKeys = [];
+        this.zivotySoundKeys = [];
     }
-    // Fallback (mal by nastať len pri zaokruhlovacich hodnotach)
-    return predmety[predmety.length - 1].name;
-}
-const LEADERBOARD_LIMIT = 5;
 
-// Premenné pre texty a tlačidlá
-let skoreText, zivotyText, gameOverText, bestScoreText;
-let tlacidloStart;
-let submitButton, playAgainButton; // Nové tlačidlá na Game Over obrazovke
-let leaderboardContainer;
-let gameOverScreenContainer; // Nový kontajner pre celú obrazovku Game Over ahojte
-let overlay; // Nové - pre tmavé pozadie
+    preload() {
+        this.load.image('pozadie', 'assets/pozadie.png');
+        this.load.image('hrac', 'assets/dusan.png');
 
-// NOVÉ: Premenné na riadenie obtiaZnosti
-let rychlostPadania;
-let intervalVytvarania;
-let dalsiLevelSkore;
+        predmetyData.forEach(p => {
+            this.load.image(p.name, 'assets/predmety/' + p.name);
+        });
 
-let isShaking = false;
-let shakeDuration = 0;
-let shakeTimer = 0;
-
-// Ostatné premenné
-let spawner;
-let skoreSound;
-let zivotySound;
-let hraBezi = false;
-let leaderboard = [];
-const LEADERBOARD_KEY = 'pixiGameLeaderboard';
-
-function resize() {
-    const scaleX = window.innerWidth / BASE_GAME_WIDTH;
-    const scaleY = window.innerHeight / BASE_GAME_HEIGHT;
-    const scale = Math.min(scaleX, scaleY);
-    const newWidth = BASE_GAME_WIDTH * scale;
-    const newHeight = BASE_GAME_HEIGHT * scale;
-    app.renderer.resize(newWidth, newHeight);
-    app.view.style.width = `${newWidth}px`;
-    app.view.style.height = `${newHeight}px`;
-    app.view.style.left = `${(window.innerWidth - newWidth) / 2}px`;
-    app.view.style.top = `${(window.innerHeight - newHeight) / 2}px`;
-    app.stage.scale.set(scale);
-    nameInput.style.fontSize = `${24 * scale}px`;
-    nameInput.style.left = `${(app.view.offsetLeft + newWidth / 2 - nameInput.offsetWidth / 2)}px`;
-    nameInput.style.top = `${(app.view.offsetTop + newHeight / 2 - 140 * scale)}px`;
-}
-
-
-function setup() {
-    window.addEventListener('resize', resize);
-    window.addEventListener('orientationchange', resize);
-    resize();
-    const storedBestScore = localStorage.getItem('bestScore');
-    if (storedBestScore) {
-        bestScore = parseInt(storedBestScore);
+        this.loadSounds(skoreSounds, SOUND_KEYS.SKORE, this.skoreSoundKeys);
+        this.loadSounds(koniecSounds, SOUND_KEYS.KONIEC, this.koniecSoundKeys);
+        this.loadSounds(zivotySounds, SOUND_KEYS.ZIVOTY, this.zivotySoundKeys);
     }
-    pozadie = PIXI.Sprite.from('assets/pozadie.png');
-    pozadie.width = BASE_GAME_WIDTH;
-    pozadie.height = BASE_GAME_HEIGHT;
-    app.stage.addChild(pozadie);
-    hrac = PIXI.Sprite.from('assets/dusan.png');
-    hrac.width = hracSirka;
-    hrac.height = hracVyska;
-    hrac.x = BASE_GAME_WIDTH / 2 - hracSirka / 2;
-    hrac.y = BASE_GAME_HEIGHT - hracVyska - 10;
-    app.stage.addChild(hrac);
 
-    skoreText = new PIXI.Text('Skore: 0', { fontFamily: 'Arial', fontSize: 24, fill: 0xffFfFf });
-    skoreText.x = 10;
-    skoreText.y = 10;
-    app.stage.addChild(skoreText);
-    bestScoreText = new PIXI.Text('Najlepsie: ' + bestScore, { fontFamily: 'Arial', fontSize: 24, fill: 0xffFfFf });
-    bestScoreText.x = 10;
-    bestScoreText.y = 40;
-    app.stage.addChild(bestScoreText);
+    loadSounds(urlList, baseKey, keyArray) {
+        urlList.forEach((url, index) => {
+            const key = `${baseKey}_${index}`;
+            this.load.audio(key, url);
+            keyArray.push(key);
+        });
+    }
 
-    zivotyText = new PIXI.Text('Zivoty: 3', { fontFamily: 'Arial', fontSize: 24, fill: 0xffffff });
-    zivotyText.anchor.set(1, 0);
-    zivotyText.x = BASE_GAME_WIDTH - 10;
-    zivotyText.y = 10;
-    app.stage.addChild(zivotyText);
+    create() {
+        console.log('Camera main exists:', this.cameras.main);
+        console.log('Cameras object:', this.cameras);
+        this.sound.volume = 0.5;
+        this.setupScaling();
+        this.loadBestScore();
 
-    // Vytvorenie vsetkých UI prvkov pre obrazovky
-    createUIs();
-    loadLeaderboard();
-    displayLeaderboard();
+        const pozadie = this.add.image(BASE_GAME_WIDTH / 2, BASE_GAME_HEIGHT / 2, 'pozadie');
+        pozadie.displayWidth = BASE_GAME_WIDTH;
+        pozadie.displayHeight = BASE_GAME_HEIGHT;
 
-    app.stage.interactive = true;
-    app.stage.hitArea = app.screen;
-    app.stage.on('pointermove', (event) => {
-        if (!hraBezi) return;
+        this.hrac = this.physics.add.sprite(BASE_GAME_WIDTH / 2, BASE_GAME_HEIGHT - hracVyska / 2 - 10, 'hrac');
+        this.hrac.displayWidth = hracSirka;
+        this.hrac.displayHeight = hracVyska;
+        this.hrac.setCollideWorldBounds(true);
+        this.hrac.body.allowGravity = false;
 
-        const pos = event.data.getLocalPosition(app.stage);
+        this.predmeti = this.physics.add.group({ runChildUpdate: true });
 
-        let x = pos.x;
+        const textStyle = { fontFamily: 'Arial', fontSize: 24, color: '#ffffff' };
+        this.skoreText = this.add.text(10, 10, 'Skore: 0', textStyle);
+        this.bestScoreText = this.add.text(10, 40, 'Najlepsie: ' + this.bestScore, textStyle);
+        this.zivotyText = this.add.text(BASE_GAME_WIDTH - 10, 10, 'Zivoty: 3', textStyle).setOrigin(1, 0);
 
-        if (activeSpecialEffect === 'invert') {
+        this.createUIs();
+
+        this.physics.add.overlap(this.hrac, this.predmeti, this.hitPredmet, this.checkCustomCollision, this);
+        this.input.on('pointermove', this.handlePlayerMovement, this);
+        this.vytvorStartTlacitko();
+    }
+
+    update(time, delta) {
+        if (!this.hraBezi) return;
+
+        this.handleScreenShake(time);
+
+        this.predmeti.children.each(predmet => {
+            if (!predmet.active || !predmet.body) return; // bezpečnostná kontrola
+
+            predmet.y += this.rychlostPadania * (delta / 16.666);
+
+            if (predmet.y > BASE_GAME_HEIGHT + 50) {
+                this.handleMissedItem(predmet);
+            }
+        });
+    }
+
+    handlePlayerMovement(pointer) {
+        if (!this.hraBezi) return;
+        if (!this.hrac || !this.hrac.body) return;
+
+        let x = pointer.x;
+
+        if (this.activeSpecialEffect === 'invert') {
             x = BASE_GAME_WIDTH - x;
         }
 
-        hrac.x = x - hracSirka / 2;
-
-        if (hrac.x < -hracSirka / 2) hrac.x = -hracSirka / 2;
-        if (hrac.x > BASE_GAME_WIDTH - hracSirka / 2)
-            hrac.x = BASE_GAME_WIDTH - hracSirka / 2;
-    });
-    app.ticker.add(gameLoop);
-}
-
-function playRandomFrom(list) {
-    const index = Math.floor(Math.random() * list.length);
-    const sound = new Howl({
-        src: [list[index]],
-        preload: true
-    });
-    sound.play();
-}
-
-function playSkore() {
-    playRandomFrom(skoreSounds);
-}
-
-function playKoniec() {
-    playRandomFrom(koniecSounds);
-}
-
-function playZivoty() {
-    playRandomFrom(zivotySounds);
-}
-
-function createUIs() {
-    // Kontajner pre celú obrazovku Game Over
-    gameOverScreenContainer = new PIXI.Container();
-    gameOverScreenContainer.visible = false;
-    app.stage.addChild(gameOverScreenContainer);
-
-    // Tmavý overlay
-    overlay = new PIXI.Graphics();
-    overlay.beginFill(0x000000, 0.7);
-    overlay.drawRect(0, 0, BASE_GAME_WIDTH, BASE_GAME_HEIGHT);
-    overlay.endFill();
-    gameOverScreenContainer.addChild(overlay);
-
-    // Text "GAME OVER"
-    const gameOverText = new PIXI.Text('GAME OVER', { fontFamily: 'Arial', fontSize: 64, fill: 0xff0000, fontWeight: 'bold' });
-    gameOverText.anchor.set(0.5);
-    gameOverText.x = BASE_GAME_WIDTH / 2;
-    gameOverText.y = BASE_GAME_HEIGHT / 2 - 200;
-    gameOverScreenContainer.addChild(gameOverText);
-
-    // Tlačidlo na odoslanie skore
-    submitButton = new PIXI.Container();
-    submitButton.x = BASE_GAME_WIDTH / 2 - 120; // Posun doľava
-    submitButton.y = BASE_GAME_HEIGHT / 2 - 50;
-    const submitBg = new PIXI.Graphics();
-    submitBg.beginFill(0x0066ff);
-    submitBg.drawRoundedRect(-100, -25, 200, 50, 10);
-    submitBg.endFill();
-    submitButton.addChild(submitBg);
-    const submitText = new PIXI.Text('ULOZIŤ SKoRE', { fontFamily: 'Arial', fontSize: 24, fill: 0xffffff, fontWeight: 'bold' });
-    submitText.anchor.set(0.5);
-    submitButton.addChild(submitText);
-    submitButton.interactive = true;
-    submitButton.buttonMode = true;
-    submitButton.on('pointertap', handleScoreSubmit);
-    gameOverScreenContainer.addChild(submitButton);
-
-    // Tlačidlo "HRAŤ ZNOVU" na Game Over obrazovke
-    playAgainButton = new PIXI.Container();
-    playAgainButton.x = BASE_GAME_WIDTH / 2; // Posun doprava
-    playAgainButton.y = BASE_GAME_HEIGHT / 2 - 50;
-    const playAgainBg = new PIXI.Graphics();
-    playAgainBg.beginFill(0x008000);
-    playAgainBg.drawRoundedRect(-100, -25, 200, 50, 10);
-    playAgainBg.endFill();
-    playAgainButton.addChild(playAgainBg);
-    const playAgainText = new PIXI.Text('HRAŤ ZNOVU', { fontFamily: 'Arial', fontSize: 24, fill: 0xffffff, fontWeight: 'bold' });
-    playAgainText.anchor.set(0.5);
-    playAgainButton.addChild(playAgainText);
-    playAgainButton.interactive = true;
-    playAgainButton.buttonMode = true;
-    playAgainButton.on('pointertap', startGame);
-    gameOverScreenContainer.addChild(playAgainButton);
-
-    // Kontajner pre zoznam leaderboardu
-    leaderboardContainer = new PIXI.Container();
-    leaderboardContainer.x = BASE_GAME_WIDTH / 2;
-    leaderboardContainer.y = BASE_GAME_HEIGHT / 2 + 50;
-    gameOverScreenContainer.addChild(leaderboardContainer);
-
-    vytvorStartTlacitko();
-}
-
-function vytvorStartTlacitko() {
-    tlacidloStart = new PIXI.Container();
-    tlacidloStart.x = BASE_GAME_WIDTH / 2;
-    tlacidloStart.y = BASE_GAME_HEIGHT / 2;
-    const pozadieTlacitka = new PIXI.Graphics();
-    pozadieTlacitka.beginFill(0x000000, 0.5);
-    pozadieTlacitka.drawRoundedRect(-100, -30, 200, 60, 15);
-    pozadieTlacitka.endFill();
-    tlacidloStart.addChild(pozadieTlacitka);
-    const textTlacitka = new PIXI.Text('START', { fontFamily: 'Arial', fontSize: 32, fill: 0xffffff });
-    textTlacitka.anchor.set(0.5);
-    tlacidloStart.addChild(textTlacitka);
-    tlacidloStart.interactive = true;
-    tlacidloStart.buttonMode = true;
-    tlacidloStart.on('pointertap', startGame);
-    app.stage.addChild(tlacidloStart);
-}
-
-function handleScoreSubmit() {
-    const playerName = nameInput.value.trim();
-    if (playerName !== "") {
-        leaderboard.push({ name: playerName, score: skore });
-        saveLeaderboard();
-        displayLeaderboard();
-    }
-    nameInput.style.display = 'none';
-    submitButton.visible = false;
-    playAgainButton.visible = true; // UkáZe tlačidlo "Hrať znovu"
-}
-
-function startGame() {
-    Howler.stop();
-    hraBezi = true;
-    skore = 0;
-    zivoty = 3;
-    skoreText.text = 'Skore: ' + skore;
-    zivotyText.text = 'Zivoty: ' + zivoty;
-    rychlostPadania = 4;
-    intervalVytvarania = 1000;
-    dalsiLevelSkore = 10;
-    predmeti.forEach(predmet => predmet.destroy());
-    predmeti = [];
-
-    // Skryje UI
-    gameOverScreenContainer.visible = false;
-    nameInput.style.display = 'none';
-    tlacidloStart.visible = false;
-
-    clearInterval(spawner);
-    spawner = setInterval(vytvorPredmet, intervalVytvarania);
-}
-
-function gameOver() {
-    hraBezi = false;
-    clearInterval(spawner);
-    playKoniec();
-
-    // Zobrazí celú obrazovku Game Over
-    gameOverScreenContainer.visible = true;
-
-    // UloZí Best Score (vZdy)
-    saveBestScore();
-
-    // NOVÉ: Podmienka na zobrazenie inputu
-    if (skore > bestScore) {
-        submitButton.visible = true;
-        playAgainButton.visible = false;
-        nameInput.style.display = 'block';
-        nameInput.value = '';
-        nameInput.focus();
-    } else {
-        submitButton.visible = false;
-        playAgainButton.visible = true; // Zobrazí len tlačidlo Hrať znovu
-        nameInput.style.display = 'none';
+        this.hrac.x = Phaser.Math.Clamp(
+            x,
+            hracSirka / 2,
+            BASE_GAME_WIDTH - hracSirka / 2
+        );
     }
 
-    displayLeaderboard();
-}
+    checkCustomCollision(hrac, predmet) {
+        // Jednoduchá kontrola pomocou Phaser fyziky
+        if (!hrac || !predmet || !hrac.body || !predmet.body) {
+            return false;
+        }
 
-function saveBestScore() {
-    if (skore > bestScore) {
-        bestScore = skore;
-        localStorage.setItem('bestScore', bestScore);
-        bestScoreText.text = 'Najlepsie: ' + bestScore;
+        // Použite vstavanú kolíznu detekciu
+        return this.physics.world.intersects(hrac.body, predmet.body);
     }
-}
 
-function loadLeaderboard() {
-    const storedLeaderboard = localStorage.getItem(LEADERBOARD_KEY);
-    if (storedLeaderboard) {
-        leaderboard = JSON.parse(storedLeaderboard);
+    hitPredmet(hrac, predmet) {
+        // Rozsiahle kontroly
+        if (!this.hraBezi || !hrac || !predmet) return;
+        if (!predmet.active || !predmet.body) return;
+
+        // Bezpečné získanie dát predmetu
+        const predmetData = predmetyData.find(p => p.name === predmet.texture?.key);
+        if (!predmetData) return;
+
+        // Bezpečné odstránenie predmetu
+        try {
+            predmet.disableBody(true, true);
+        } catch (e) {
+            console.warn('Chyba pri odstraňovaní predmetu:', e);
+            predmet.destroy();
+        }
+
+        // Aktualizácia skóre a životov
+        this.skore += predmetData.score || 1;
+        this.skoreText.setText('Skore: ' + this.skore);
+
+        if (predmetData.health && this.zivoty < 6) {
+            this.zivoty += predmetData.health;
+            this.zivotyText.setText('Zivoty: ' + this.zivoty);
+            this.playZivoty();
+        }
+
+        this.playSkore();
+        if (this.skore >= this.dalsiLevelSkore) this.zvysObtiaznost();
+        this.handleSpecialEffect(predmetData.specialEffect);
     }
-}
 
-function saveLeaderboard() {
-    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboard));
-}
 
-function displayLeaderboard() {
-    leaderboardContainer.removeChildren();
-    const header = new PIXI.Text('Najlepsie skore', { fontFamily: 'Arial', fontSize: 24, fill: 0xffffff });
-    header.anchor.set(0.5);
-    header.y = -40;
-    leaderboardContainer.addChild(header);
-    const sortedLeaderboard = leaderboard.sort((a, b) => b.score - a.score).slice(0, LEADERBOARD_LIMIT);
-    sortedLeaderboard.forEach((entry, index) => {
-        const text = new PIXI.Text(`${index + 1}. ${entry.name}: ${entry.score}`, { fontFamily: 'Arial', fontSize: 18, fill: 0xffffff });
-        text.anchor.set(0.5);
-        text.y = index * 30;
-        leaderboardContainer.addChild(text);
-    });
-}
+    handleMissedItem(predmet) {
+        if (!predmet || !predmet.active) return;
 
-function vytvorPredmet() {
-    const predmetNazov = vyberPredmetPodlaSance();
-    const predmet = PIXI.Sprite.from("assets/predmety/" + predmetNazov);
-    const polomer = 60;
-    predmet.width = polomer;
-    predmet.height = polomer;
-    predmet.name = predmetNazov;
-    const predmetData = predmety.find(p => p.name === predmetNazov);
-    if (predmetData) {
-        predmet.score = predmetData.score;
-        predmet.health = predmetData.health;
-        predmet.specialEffect = predmetData.specialEffect;
-    }
-    predmet.x = Math.random() * (BASE_GAME_WIDTH - polomer * 2) + polomer;
-    predmet.y = -polomer;
-    app.stage.addChild(predmet);
-    predmeti.push(predmet);
-}
+        this.zivoty--;
+        this.shakeScreen(200);
+        this.zivotyText.setText('Zivoty: ' + this.zivoty);
+        this.playZivoty();
 
-function shakeScreen(duration) {
-    if (isShaking) return;
-    isShaking = true;
-    shakeDuration = duration;
-    shakeTimer = Date.now();
-}
-
-function zvysObtiaznost() {
-    rychlostPadania += 0.5;
-    if (intervalVytvarania > 300) {
-        intervalVytvarania -= 75;
-    }
-    clearInterval(spawner);
-    spawner = setInterval(vytvorPredmet, intervalVytvarania);
-    dalsiLevelSkore += 5;
-}
-
-function gameLoop(delta) {
-    if (!hraBezi) return;
-    if (isShaking) {
-        if (Date.now() - shakeTimer < shakeDuration) {
-            app.stage.x = (Math.random() - 0.5) * 10;
-            app.stage.y = (Math.random() - 0.5) * 10;
+        // Bezpečné odstránenie predmetu
+        if (predmet.body) {
+            predmet.disableBody(true, true);
         } else {
-            app.stage.x = 0;
-            app.stage.y = 0;
-            isShaking = false;
-        }
-    }
-    for (let i = predmeti.length - 1; i >= 0; i--) {
-    const predmet = predmeti[i];
-    predmet.y += rychlostPadania * delta;
-
-    // --- HANDLE COLLISION ---------------------------------------------------
-    if (zistilaSaKolizia(hrac, predmet)) {
-
-        // SCORE
-        skore += predmet.score ?? 1;
-        skoreText.text = 'Skore: ' + skore;
-
-        // HEALTH
-        if (predmet.health && zivoty < 6) {
-            zivoty += predmet.health;
-            zivotyText.text = 'Zivoty: ' + zivoty;
+            predmet.destroy();
         }
 
-        playSkore();
-
-        // LEVEL UP
-        if (skore >= dalsiLevelSkore) zvysObtiaznost();
-
-        // SPECIAL EFFECT
-        switch (predmet.specialEffect) {
-            case 'boost': {
-                rychlostPadania = Math.max(rychlostPadania + 2, 2);
-                setTimeout(() => {
-                    rychlostPadania = Math.max(rychlostPadania - 2, 2);
-                }, 2000);
-                break;
-            }
-            case 'slow': {
-                rychlostPadania = Math.max(rychlostPadania - 2, 2);
-                setTimeout(() => {
-                    rychlostPadania += 2;
-                }, 2000);
-                break;
-            }
-            case 'invert': {
-                activeSpecialEffect = 'invert';
-                setTimeout(() => {
-                    activeSpecialEffect = null;
-                }, 2000);
-                break;
-            }
-        }
-
-        // REMOVE ITEM
-        app.stage.removeChild(predmet);
-        predmeti.splice(i, 1);
-        continue;   // skip falling logic
+        if (this.zivoty <= 0) this.gameOver();
     }
 
-    // --- HANDLE MISSED ITEMS -----------------------------------------------
-    const missed = predmet.y > BASE_GAME_HEIGHT + 50;
-    if (!missed) continue;
+    handleScreenShake(time) {
+        if (!this.isShaking || !this.cameras || !this.cameras.main) return;
 
-    zivoty--;
-    shakeScreen(200);
-    zivotyText.text = 'Zivoty: ' + zivoty;
-    playZivoty();
+        const camera = this.cameras.main;
 
-    app.stage.removeChild(predmet);
-    predmeti.splice(i, 1);
+        if (time < this.shakeTimer + this.shakeDuration) {
+            camera.setScroll(
+                (Math.random() - 0.5) * 10,
+                (Math.random() - 0.5) * 10
+            );
+        } else {
+            camera.setScroll(0, 0);
+            this.isShaking = false;
+        }
+    }
+    playRandomFrom(keyArray) {
+        if (!keyArray || keyArray.length === 0) return;
+        const index = Phaser.Math.Between(0, keyArray.length - 1);
+        this.sound.play(keyArray[index]);
+    }
 
-    if (zivoty <= 0) gameOver();
+    playSkore() { this.playRandomFrom(this.skoreSoundKeys); }
+    playKoniec() { this.playRandomFrom(this.koniecSoundKeys); }
+    playZivoty() { this.playRandomFrom(this.zivotySoundKeys); }
+
+    startGame() {
+        if (!this.hrac) return;
+        this.sound.stopAll();
+        this.hraBezi = true;
+        this.skore = 0;
+        this.zivoty = 3;
+        this.activeSpecialEffect = null;
+        this.rychlostPadania = 4;
+        this.intervalVytvarania = 1000;
+        this.dalsiLevelSkore = 10;
+
+        this.skoreText.setText('Skore: ' + this.skore);
+        this.zivotyText.setText('Zivoty: ' + this.zivoty);
+
+        this.predmeti.clear(true, true);
+
+        this.gameOverScreenContainer.setVisible(false);
+        this.nameInput.style.display = 'none';
+        this.tlacidloStart.setVisible(false);
+
+        if (this.spawner) this.spawner.remove(false);
+        this.spawner = this.time.addEvent({
+            delay: this.intervalVytvarania,
+            callback: this.vytvorPredmet,
+            callbackScope: this,
+            loop: true
+        });
+    }
+
+    gameOver() {
+        this.hraBezi = false;
+        if (this.spawner) this.spawner.remove(false);
+        this.playKoniec();
+
+        this.gameOverScreenContainer.setVisible(true);
+        this.saveBestScore();
+
+        if (this.skore > this.bestScore) {
+            this.playAgainButtonPhaser.setVisible(false);
+            this.resizeInput();
+        } else {
+            this.playAgainButtonPhaser.setVisible(true);
+            this.nameInput.style.display = 'none';
+        }
+
+    }
+
+    vytvorPredmet() {
+        const predmetNazov = this.vyberPredmetPodlaSance();
+        const predmetDataObj = predmetyData.find(p => p.name === predmetNazov);
+        if (!predmetDataObj) return;
+
+        const polomer = 60;
+        const x = Phaser.Math.RND.between(polomer, BASE_GAME_WIDTH - polomer);
+
+        // Bezpečné vytvorenie predmetu
+        const predmet = this.predmeti.create(x, -polomer, predmetNazov);
+
+        if (!predmet) return;
+
+        predmet.displayWidth = polomer;
+        predmet.displayHeight = polomer;
+
+        // Kontrola existencie body pred nastavením
+        if (predmet.body) {
+            predmet.body.setAllowGravity(false);
+            predmet.body.immovable = true;
+        }
+
+        // Uloženie dát priamo do predmetu
+        predmet.predmetData = predmetDataObj;
+    }
+
+    zvysObtiaznost() {
+        this.rychlostPadania += 0.5;
+        if (this.intervalVytvarania > 300) this.intervalVytvarania -= 75;
+        if (this.spawner) this.spawner.delay = this.intervalVytvarania;
+        this.dalsiLevelSkore += 5;
+    }
+
+    handleSpecialEffect(effect) {
+        switch (effect) {
+            case 'boost':
+                this.rychlostPadania += 2;
+                this.time.delayedCall(2000, () => { this.rychlostPadania = Math.max(this.rychlostPadania - 2, 2); }, [], this);
+                break;
+            case 'slow':
+                this.rychlostPadania = Math.max(this.rychlostPadania - 2, 2);
+                this.time.delayedCall(2000, () => { this.rychlostPadania += 2; }, [], this);
+                break;
+            case 'invert':
+                this.activeSpecialEffect = 'invert';
+                this.time.delayedCall(2000, () => { this.activeSpecialEffect = null; }, [], this);
+                break;
+        }
+    }
+
+    shakeScreen(duration) {
+        if (this.isShaking) return;
+        this.isShaking = true;
+        this.shakeDuration = duration;
+        this.shakeTimer = this.time.now;
+    }
+
+    setupScaling() {
+        window.addEventListener('resize', () => this.resizeInput());
+        this.resizeInput();
+    }
+
+    resizeInput() {
+        const gameCanvas = this.sys.game.canvas;
+        const scale = gameCanvas.style.transform.match(/scale\(([0-9.]+)\)/);
+        const currentScale = scale ? parseFloat(scale[1]) : 1;
+
+        if (this.nameInput && this.nameInput.style.display !== 'none') {
+            this.nameInput.style.fontSize = `${24 * currentScale}px`;
+
+            const inputWidth = this.nameInput.offsetWidth;
+            const canvasRect = gameCanvas.getBoundingClientRect();
+
+            this.nameInput.style.left = `${canvasRect.left + (BASE_GAME_WIDTH * currentScale / 2) - (inputWidth / 2)}px`;
+            this.nameInput.style.top = `${canvasRect.top + (BASE_GAME_HEIGHT * currentScale / 2) - (140 * currentScale)}px`;
+        }
+    }
+
+    vytvorStartTlacitko() {
+        this.tlacidloStart = this.add.container(BASE_GAME_WIDTH / 2, BASE_GAME_HEIGHT / 2);
+        const pozadieTlacitka = this.add.graphics();
+        pozadieTlacitka.fillStyle(0x000000, 0.5);
+        pozadieTlacitka.fillRoundedRect(-100, -30, 200, 60, 15);
+        this.tlacidloStart.add(pozadieTlacitka);
+
+        const textTlacitka = this.add.text(0, 0, 'START', { fontFamily: 'Arial', fontSize: 32, fill: '#ffffff' }).setOrigin(0.5);
+        this.tlacidloStart.add(textTlacitka);
+
+        this.tlacidloStart.setInteractive(new Phaser.Geom.Rectangle(-100, -30, 200, 60), Phaser.Geom.Rectangle.Contains);
+        this.tlacidloStart.on('pointerdown', this.startGame, this);
+    }
+
+    createUIs() {
+        // Vytvorenie kontajnera pre UI s VYŠŠOU HĽADKOVOU VRSTVOU
+        this.gameOverScreenContainer = this.add.container(0, 0).setVisible(false).setDepth(1000); // <-- Pridané setDepth(1000)
+
+        // Overlay - čierny polopriehľadný
+        const overlay = this.add.graphics();
+        overlay.fillStyle(0x000000, 0.7);
+        overlay.fillRect(0, 0, BASE_GAME_WIDTH, BASE_GAME_HEIGHT);
+        overlay.setDepth(999); // <-- Nastavenie hĺbky pre overlay
+        this.gameOverScreenContainer.add(overlay);
+
+        // Text GAME OVER
+        this.gameOverText = this.add.text(BASE_GAME_WIDTH / 2, BASE_GAME_HEIGHT / 2 - 100, 'GAME OVER', {
+            fontFamily: 'Arial', fontSize: 64, color: '#ff0000', fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(1001); // <-- Vyššia hĺbka ako overlay
+        this.gameOverScreenContainer.add(this.gameOverText);
+
+        // Tlačidlá
+        this.playAgainButtonPhaser = this.createButton('HRAŤ ZNOVU', 0x008000, BASE_GAME_WIDTH / 2, BASE_GAME_HEIGHT / 2 , this.startGame.bind(this));
+        this.playAgainButtonPhaser.setDepth(1001); // <-- Vyššia hĺbka
+        this.gameOverScreenContainer.add(this.playAgainButtonPhaser).setVisible(false);
+    }
+
+    createButton(text, color, x, y, callback) {
+        const container = this.add.container(x, y);
+        const bg = this.add.graphics();
+        bg.fillStyle(color);
+        bg.fillRoundedRect(-100, -25, 200, 50, 10);
+        container.add(bg);
+
+        const textObj = this.add.text(0, 0, text, { fontFamily: 'Arial', fontSize: 24, fill: '#ffffff', fontStyle: 'bold' }).setOrigin(0.5);
+        container.add(textObj);
+
+        container.setInteractive(new Phaser.Geom.Rectangle(-100, -25, 200, 50), Phaser.Geom.Rectangle.Contains);
+        container.on('pointerdown', callback);
+        return container;
+    }
+
+    loadBestScore() {
+        const storedBestScore = localStorage.getItem('bestScore');
+        if (storedBestScore) this.bestScore = parseInt(storedBestScore);
+    }
+
+    saveBestScore() {
+        if (this.skore > this.bestScore) {
+            this.bestScore = this.skore;
+            localStorage.setItem('bestScore', this.bestScore);
+            this.bestScoreText.setText('Najlepsie: ' + this.bestScore);
+        }
+    }
+
+    vyberPredmetPodlaSance() {
+        const total = predmetyData.reduce((s, p) => s + p.weight, 0);
+        let r = Math.random() * total;
+        for (const p of predmetyData) {
+            if (r < p.weight) return p.name;
+            r -= p.weight;
+        }
+        return predmetyData[predmetyData.length - 1].name;
+    }
 }
-}
 
-function zistilaSaKolizia(objektA, objektB) {
-    const a = objektA.getBounds();
-    const b = objektB.getBounds();
-    const hitboxVyska = 70;
-    const posunY = a.height - hitboxVyska;
-    const a_hitbox = {
-        x: a.x,
-        y: a.y + posunY,
-        width: a.width,
-        height: hitboxVyska
-    };
-    return a_hitbox.x + a_hitbox.width > b.x &&
-        a_hitbox.x < b.x + b.width &&
-        a_hitbox.y + a_hitbox.height > b.y &&
-        a_hitbox.y < b.y + b.height;
-}
+// Konfigurácia Phaser hry
+const config = {
+    type: Phaser.AUTO,
+    width: BASE_GAME_WIDTH,
+    height: BASE_GAME_HEIGHT,
+    parent: 'gameContainer', // ID kontajnera v HTML
+    backgroundColor: '#000000',
+    scale: {
+        mode: Phaser.Scale.FIT, // Zabezpečí škálovanie
+        autoCenter: Phaser.Scale.CENTER_BOTH
+    },
+    physics: {
+        default: 'arcade',
+        arcade: {
+            debug: false // Nastav na true pre zobrazenie hitboxov
+        }
+    },
+    scene: [MainScene]
+};
 
-setup();
+const game = new Phaser.Game(config);

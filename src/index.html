@@ -4,9 +4,6 @@
 <head>
     <title>Tvoja Hra</title>
     <style>
-        div{
-            display: none;
-        }
         body {
             margin: 0;
             padding: 0;
@@ -18,7 +15,6 @@
         }
 
         #gameContainer {
-            display: block !important;
             position: relative;
         }
 
@@ -45,9 +41,10 @@
     <div id="gameContainer">
         <input type="text" id="nameInput" placeholder="Tvoje meno">
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.0/pixi.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.3/howler.min.js"></script>
-    <script src="main.js"></script>
+
+    <!-- Phaser 3 CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3/dist/phaser.min.js"></script>
+    <script type="module" src="main.js"></script>
 </body>
 
 </html>
