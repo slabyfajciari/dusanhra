@@ -9,6 +9,7 @@ document.getElementById('gameContainer').appendChild(app.view);
 const nameInput = document.getElementById('nameInput');
 
 // --- 2. Príprava herných premenných ---
+var activeSpecialEffect = null; // Nové: Aktívny špeciálny efekt hráča
 let hrac;
 const hracSirka = 120;
 const hracVyska = 120;
@@ -41,7 +42,7 @@ const predmety = [
     { name: 'didlo.png', weight: 5, health: 1, score: 2, specialEffect: null },
     { name: 'zuvak.png', weight: 15, health: 0, score: 1, specialEffect: null },
     { name: 'hhc.png', weight: 15, health: 0, score: 1, specialEffect: 'slow' },
-    { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1, specialEffect: null }
+    { name: 'dusan_green_apple_.png', weight: 10, health: 0, score: 1, specialEffect: 'invert' }
 ];
 
 // Vyberie nazov suboru predmetu podla vah (weighted random).
@@ -145,7 +146,14 @@ function setup() {
         if (!hraBezi) return;
 
         const pos = event.data.getLocalPosition(app.stage);
-        hrac.x = pos.x - hracSirka / 2;
+
+        let x = pos.x;
+
+        if (activeSpecialEffect === 'invert') {
+            x = BASE_GAME_WIDTH - x;
+        }
+
+        hrac.x = x - hracSirka / 2;
 
         if (hrac.x < -hracSirka / 2) hrac.x = -hracSirka / 2;
         if (hrac.x > BASE_GAME_WIDTH - hracSirka / 2)
@@ -434,6 +442,13 @@ function gameLoop(delta) {
                 rychlostPadania = Math.max(rychlostPadania - 2, 2);
                 setTimeout(() => {
                     rychlostPadania += 2;
+                }, 2000);
+                break;
+            }
+            case 'invert': {
+                activeSpecialEffect = 'invert';
+                setTimeout(() => {
+                    activeSpecialEffect = null;
                 }, 2000);
                 break;
             }
