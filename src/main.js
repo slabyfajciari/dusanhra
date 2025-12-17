@@ -1,5 +1,6 @@
 //odjebat prave tlacitko
-// window.addEventListener('contextmenu', (e) => e.preventDefault());
+window.addEventListener('contextmenu', (e) => e.preventDefault());
+
 
 // --- 1. Konfigurácia a Globálne Premenné ---
 const BASE_GAME_WIDTH = window.innerWidth
@@ -81,6 +82,25 @@ class MainMenuScene extends Phaser.Scene {
     }
 
     create() {
+        this.cheatCode = 'kokot'; // tvoj cheat
+        this.inputBuffer = ''; // kam zbieraš písmená
+
+        // listener pre všetky klávesy
+        this.input.keyboard.on('keydown', (event) => {
+            const key = event.key.toLowerCase(); // malými písmenami
+            this.inputBuffer += key;
+
+            // obmedz buffer len na dĺžku cheatu
+            if (this.inputBuffer.length > this.cheatCode.length) {
+                this.inputBuffer = this.inputBuffer.slice(-this.cheatCode.length);
+            }
+
+            // kontrola cheatu
+            if (this.inputBuffer === this.cheatCode) {
+                this.activateCheat();
+                this.inputBuffer = ''; // reset buffer
+            }
+        });
         this.loadBestScore();
         this.sound.volume = 0.5;
 
@@ -123,6 +143,12 @@ class MainMenuScene extends Phaser.Scene {
         container.on('pointerdown', callback);
         return container;
     }
+    activateCheat() {
+        console.log('Cheat activated!');
+        // tu vlož čo sa má stať, napríklad:
+        // this.player.health = 999;
+        // this.player.giveAllWeapons();
+    }
 
     loadBestScore() {
         const storedBestScore = localStorage.getItem('bestScore');
@@ -152,11 +178,17 @@ class GameScene extends Phaser.Scene {
         this.shakeDuration = 0;
         this.level = 1; // základný level
         this.bonusLevel = 0; // dočasný bonus od special efektov
+        this.rotatingSpeed = 0.04;
 
         // UI & Input
         this.skoreText = null;
         this.zivotyText = null;
         this.bestScoreText = null;
+
+
+        // Cheaty
+        this.activeCheatCode = null; // tvoj cheat
+        this.inputBuffer = ''; // kam zbieraš písmená
 
         // Zvuky
         this.skoreSoundKeys = [];
@@ -191,18 +223,19 @@ class GameScene extends Phaser.Scene {
 
         const textStyle = {
             fontFamily: 'monospace', fontSize: 24, color: '#ffffff', stroke: '#000',
-            strokeThickness: 3,    fontStyle: 'Bold',
+            strokeThickness: 3, fontStyle: 'Bold',
         };
-        this.skoreText = this.add.text(10, 10, 'SKÓRE: 0', textStyle);
-        this.bestScoreText = this.add.text(10, 40, 'NAJLEPŠIE: ' + this.bestScore, textStyle);
-        this.zivotyText = this.add.text(BASE_GAME_WIDTH - 10, 10, 'ŽIVOTY: 3', textStyle).setOrigin(1, 0);
+        this.skoreText = this.add.text(10, 10, 'SKÓRE: 0', textStyle).setDepth(1);
+        this.bestScoreText = this.add.text(10, 40, 'NAJLEPŠIE: ' + this.bestScore, textStyle).setDepth(1);
+        this.zivotyText = this.add.text(BASE_GAME_WIDTH - 10, 10, 'ŽIVOTY: 3', textStyle).setDepth(1).setOrigin(1, 0);
+
 
         // Načítaj zvuky
         this.loadSoundsFromRegistry();
 
         this.physics.add.overlap(this.hrac, this.predmeti, this.hitPredmet, this.checkCustomCollision, this);
         this.input.on('pointermove', this.handlePlayerMovement, this);
-        
+
         // Spusti hru okamžite
         this.startGame();
     }
@@ -225,7 +258,11 @@ class GameScene extends Phaser.Scene {
 
     update(time, delta) {
         if (!this.hraBezi) return;
-
+        if (this.predmeti) {
+            for (let predmet of this.predmeti.getChildren()) {
+                predmet.rotation += this.rotatingSpeed;
+            }
+        }
         this.handleScreenShake(time);
         this.predmeti.children.each(predmet => {
             if (!predmet.active || !predmet.body) return; // bezpečnostná kontrola
@@ -236,6 +273,7 @@ class GameScene extends Phaser.Scene {
                 this.handleMissedItem(predmet);
             }
         });
+
     }
 
     handlePlayerMovement(pointer) {
@@ -349,7 +387,6 @@ class GameScene extends Phaser.Scene {
         if (this.spawner) {
             this.spawner.delay = this.intervalVytvarania;
         }
-        console.log('Updating level.', this.level, '. Current score:', this.skore, 'Bonus level:', this.bonusLevel);
     }
 
 
@@ -408,6 +445,7 @@ class GameScene extends Phaser.Scene {
 
         // Bezpečné vytvorenie predmetu
         const predmet = this.predmeti.create(x, -polomer, predmetNazov);
+        predmet.rotation = 0.01 * Phaser.Math.Between(0, 360);
 
         if (!predmet) return;
 
@@ -436,17 +474,25 @@ class GameScene extends Phaser.Scene {
         const bonus = 2; // levelový bonus alebo malus
         switch (effect) {
             case 'boost':
+                this.activeSpecialEffect = 'boost';
+                this.rotatingSpeed = 0.08;
                 this.bonusLevel += bonus;
                 this.updateLevel();
                 this.time.delayedCall(2000, () => {
+                    this.activeSpecialEffect = null;
+                    this.rotatingSpeed = 0.04;
                     this.bonusLevel -= bonus;
                     this.updateLevel();
                 }, [], this);
                 break;
             case 'slow':
+                this.activeSpecialEffect = 'slow';
+                this.rotatingSpeed = 0.02;
                 this.bonusLevel -= bonus;
                 this.updateLevel();
                 this.time.delayedCall(2000, () => {
+                    this.activeSpecialEffect = null;
+                    this.rotatingSpeed = 0.04;
                     this.bonusLevel += bonus;
                     this.updateLevel();
                 }, [], this);
@@ -583,7 +629,7 @@ const config = {
     height: BASE_GAME_HEIGHT,
     parent: 'gameContainer', // ID kontajnera v HTML
     backgroundColor: '#000000',
-    smoothPixelArt: true,
+    pixelArt: true,
     scale: {
         mode: Phaser.Scale.RESIZE, // Zabezpečí škálovanie
         autoCenter: Phaser.Scale.CENTER_BOTH,
