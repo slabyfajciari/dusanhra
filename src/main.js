@@ -11,12 +11,14 @@ const hracVyska = 120;
 
 // Konštanty pre kľúče zvukov v Phaser
 const SOUND_KEYS = {
+    POZADICKO: 'pozadie_sound',
     SKORE: 'skore_sound',
     KONIEC: 'koniec_sound',
     ZIVOTY: 'zivoty_sound'
 };
 
 // Zoznamy zvukov (URL) pre načítanie
+const bgSounds = ['assets/zvuky/majksprajt.mp3'];
 const skoreSounds = [
     'https://us-tuna-sounds-files.voicemod.net/1fd241ac-fff1-448c-b460-e0ec0f5677a3-1697143226783.mp3',
     'https://us-tuna-sounds-files.voicemod.net/94acff2e-ed53-401e-a27f-e9a549f3ec92-1650268712414.mp3',
@@ -59,6 +61,7 @@ class BootScene extends Phaser.Scene {
         this.loadSounds(skoreSounds, SOUND_KEYS.SKORE);
         this.loadSounds(koniecSounds, SOUND_KEYS.KONIEC);
         this.loadSounds(zivotySounds, SOUND_KEYS.ZIVOTY);
+        this.loadSounds(bgSounds, SOUND_KEYS.POZADICKO);
     }
 
     loadSounds(urlList, baseKey) {
@@ -69,6 +72,10 @@ class BootScene extends Phaser.Scene {
     }
 
     create() {
+        this.registry.set('skoreKeys', skoreSounds.map((_, i) => `${SOUND_KEYS.SKORE}_${i}`));
+        this.registry.set('koniecKeys', koniecSounds.map((_, i) => `${SOUND_KEYS.KONIEC}_${i}`));
+        this.registry.set('zivotyKeys', zivotySounds.map((_, i) => `${SOUND_KEYS.ZIVOTY}_${i}`));
+        this.registry.set('bgKeys', bgSounds.map((_, i) => `${SOUND_KEYS.POZADICKO}_${i}`));
         // Po načítaní všetkých assetov prejdi na MainMenuScene
         this.scene.start('MainMenuScene');
     }
@@ -194,6 +201,7 @@ class GameScene extends Phaser.Scene {
         this.skoreSoundKeys = [];
         this.koniecSoundKeys = [];
         this.zivotySoundKeys = [];
+        this.pozadieSoundKeys = [];
     }
 
     create() {
@@ -241,19 +249,10 @@ class GameScene extends Phaser.Scene {
     }
 
     loadSoundsFromRegistry() {
-        // Načítaj zvuky z registra (boli už načítané v BootScene)
-        for (let i = 0; i < skoreSounds.length; i++) {
-            const key = `${SOUND_KEYS.SKORE}_${i}`;
-            this.skoreSoundKeys.push(key);
-        }
-        for (let i = 0; i < koniecSounds.length; i++) {
-            const key = `${SOUND_KEYS.KONIEC}_${i}`;
-            this.koniecSoundKeys.push(key);
-        }
-        for (let i = 0; i < zivotySounds.length; i++) {
-            const key = `${SOUND_KEYS.ZIVOTY}_${i}`;
-            this.zivotySoundKeys.push(key);
-        }
+        this.skoreSoundKeys = this.registry.get('skoreKeys');
+        this.koniecSoundKeys = this.registry.get('koniecKeys');
+        this.zivotySoundKeys = this.registry.get('zivotyKeys');
+        this.pozadieSoundKeys = this.registry.get('bgKeys');
     }
 
     update(time, delta) {
@@ -277,17 +276,12 @@ class GameScene extends Phaser.Scene {
     }
 
     handlePlayerMovement(pointer) {
-        if (!this.hraBezi) return;
-        if (!this.hrac || !this.hrac.body) return;
+        if (!this.hraBezi || !this.hrac || !this.hrac.body) return;
 
-        let x = pointer.x;
-
-        // if (this.activeSpecialEffect === 'invert') {
-        //     x = BASE_GAME_WIDTH - x;
-        // }
+        let targetX = pointer.x;
 
         this.hrac.x = Phaser.Math.Clamp(
-            x,
+            targetX,
             hracSirka / 2,
             BASE_GAME_WIDTH - hracSirka / 2
         );
@@ -396,9 +390,23 @@ class GameScene extends Phaser.Scene {
         this.sound.play(keyArray[index]);
     }
 
+    playPozadicko() {
+        // Ak už hudba hrá, nepúšťaj ju znova
+        if (this.bgMusic && this.bgMusic.isPlaying) return console.log('hudba uz bezi');
+
+        // Pustíme prvý track zo zoznamu pozadia
+        const key = this.pozadieSoundKeys[0];
+        console.log('pustam hudbu', key);
+        if (key) {
+            this.bgMusic = this.sound.add(key, { loop: true, volume: 0.3 });
+            this.bgMusic.play();
+        }
+    }
     playSkore() { this.playRandomFrom(this.skoreSoundKeys); }
     playKoniec() { this.playRandomFrom(this.koniecSoundKeys); }
-    playZivoty() { this.playRandomFrom(this.zivotySoundKeys); }
+    playZivoty() {
+        this.playRandomFrom(this.zivotySoundKeys);
+    }
 
     startGame() {
         if (!this.hrac) return;
@@ -423,6 +431,7 @@ class GameScene extends Phaser.Scene {
             callbackScope: this,
             loop: true
         });
+        this.playPozadicko();
     }
 
     gameOver() {
@@ -430,6 +439,9 @@ class GameScene extends Phaser.Scene {
         if (this.spawner) this.spawner.remove(false);
         this.playKoniec();
         this.saveBestScore();
+        if (this.bgMusic) {
+            this.bgMusic.stop();
+        }
 
         // Prejdi na GameOverScene a posli dáta
         this.scene.start('GameOverScene', { skore: this.skore, bestScore: this.bestScore });
