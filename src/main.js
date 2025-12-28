@@ -51,10 +51,41 @@ class BootScene extends Phaser.Scene {
     }
 
     preload() {
-        this.load.image('pozadie', 'assets/pozadie.png');
-        this.load.image('hrac', 'assets/dusan.png');
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
 
+        // --- PROGRESS BAR GRAFIKA ---
+        const progressBar = this.add.graphics();
+        const progressBox = this.add.graphics();
+        progressBox.fillStyle(0x222222, 0.8);
+        progressBox.fillRect(width / 2 - 160, height / 2 - 10, 320, 50);
+
+        // Text načítavania
+        const loadingText = this.make.text({
+            x: width / 2,
+            y: height / 2 + 15 ,
+            text: 'Načítavam...',
+            style: { font: '20px monospace', fill: '#ffffff' }
+        }).setOrigin(0.5, 0.5);
+        this.load.on('progress', (value) => {
+            progressBar.clear();
+            progressBar.fillStyle(0xffffff, 1);
+            progressBar.fillRect(width / 2 - 150, height / 2 , 300 * value, 30);
+        });
+        
+        this.load.on('complete', () => {
+            progressBar.destroy();
+            progressBox.destroy();
+            loadingText.destroy();
+
+        this.scene.start('MainMenuScene');
+        });
+        
+        // --- NAČÍTANIE ASSETOV ---
+        this.load.image('pozadie', 'assets/pozadie.png');
+        
         predmetyData.forEach(p => {
+            this.load.image('hrac', 'assets/dusan.png');
             this.load.image(p.name, 'assets/predmety/' + p.name);
         });
 
@@ -72,12 +103,14 @@ class BootScene extends Phaser.Scene {
     }
 
     create() {
+        const width = this.cameras.main.width;
+        const height = this.cameras.main.height;
+
+
         this.registry.set('skoreKeys', skoreSounds.map((_, i) => `${SOUND_KEYS.SKORE}_${i}`));
         this.registry.set('koniecKeys', koniecSounds.map((_, i) => `${SOUND_KEYS.KONIEC}_${i}`));
         this.registry.set('zivotyKeys', zivotySounds.map((_, i) => `${SOUND_KEYS.ZIVOTY}_${i}`));
         this.registry.set('bgKeys', bgSounds.map((_, i) => `${SOUND_KEYS.POZADICKO}_${i}`));
-        // Po načítaní všetkých assetov prejdi na MainMenuScene
-        this.scene.start('MainMenuScene');
     }
 }
 
@@ -152,9 +185,6 @@ class MainMenuScene extends Phaser.Scene {
     }
     activateCheat() {
         console.log('Cheat activated!');
-        // tu vlož čo sa má stať, napríklad:
-        // this.player.health = 999;
-        // this.player.giveAllWeapons();
     }
 
     loadBestScore() {
